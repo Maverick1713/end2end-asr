@@ -151,7 +151,7 @@ def calculate_loss(pred, gold, input_lengths=None, target_lengths=None, smoothin
         # print(target_lengths)
 
         log_probs = F.log_softmax(log_probs, dim=2)
-        loss = F.ctc_loss(log_probs, targets, input_lengths, target_lengths, reduction="mean")
+        loss = F.ctc_loss(log_probs, targets, input_lengths, target_lengths, reduction="mean",blank=3)
         # mask = loss.clone() # mask Inf loss
         # # mask[mask != float("Inf")] = 1
         # mask[mask == float("Inf")] = 0

@@ -56,6 +56,21 @@ class Trainer():
                 opt.zero_grad()
 
                 pred, gold, hyp_seq, gold_seq = model(src, src_lengths, tgt, verbose=False)
+                def decode_pred(pred, id2token):
+                    probs = torch.softmax(pred, dim=-1)
+                    pred_ids = torch.argmax(probs, dim=-1)  # [B, T]
+                    
+                    decoded = []
+                    for seq in pred_ids:
+                        tokens = []
+                        for idx in seq:
+                            token = id2token.get(idx.item(), '')
+                            if token == "<pad>" or token == "<eos>":
+                                break
+                            tokens.append(token)
+                        decoded.append("".join(tokens))
+                    return decoded
+                print("output: ", decode_pred(pred,id2label))
 
                 try: # handle case for CTC
                     strs_gold, strs_hyps = [], []
@@ -155,14 +170,14 @@ class Trainer():
                         for ut_gold in gold_seq:
                             str_gold = ""
                             for x in ut_gold:
-                                if int(x) == constant.PAD_TOKEN:
+                                if int(x) == constant.PAD_TOKEN or int(x) == 3:
                                     break
                                 str_gold = str_gold + id2label[int(x)]
                             strs_gold.append(str_gold)
                         for ut_hyp in hyp_seq:
                             str_hyp = ""
                             for x in ut_hyp:
-                                if int(x) == constant.PAD_TOKEN:
+                                if int(x) == constant.PAD_TOKEN or int(x) == 3:
                                     break
                                 str_hyp = str_hyp + id2label[int(x)]
                             strs_hyps.append(str_hyp)
@@ -206,6 +221,7 @@ class Trainer():
                 best_valid_loss = total_valid_loss/len(valid_loader)
                 save_model(model, (epoch+1), opt, metrics,
                         label2id, id2label, best_model=True)
+                print("best_model.th updated")
 
             if constant.args.shuffle:
                 logging.info("SHUFFLE")

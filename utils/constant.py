@@ -30,7 +30,7 @@ parser.add_argument('--device-ids', default=None, nargs='+', type=int,
                     help='If using cuda, sets the GPU devices for the process')
 parser.add_argument('--lr', '--learning-rate', default=3e-4, type=float, help='initial learning rate')
 
-parser.add_argument('--save-every', default=5, type=int, help='Save model every certain number of epochs')
+parser.add_argument('--save-every', default=2, type=int, help='Save model every certain number of epochs')
 parser.add_argument('--save-folder', default='models/', help='Location to save epoch models')
 
 parser.add_argument('--emb_trg_sharing', action='store_true', help='Share embedding weight source and target')
@@ -58,8 +58,8 @@ parser.add_argument('--dim-input', default=161, type=int, help='Input dimension'
 parser.add_argument('--dim-inner', default=1024, type=int, help='Inner dimension')
 parser.add_argument('--dim-emb', default=512, type=int, help='Embedding dimension')
 
-parser.add_argument('--src-max-len', default=4000, type=int, help='Source max length')
-parser.add_argument('--tgt-max-len', default=1000, type=int, help='Target max length')
+parser.add_argument('--src-max-len', default=620, type=int, help='Source max length')
+parser.add_argument('--tgt-max-len', default=520, type=int, help='Target max length')
 
 # Noam optimizer
 parser.add_argument('--warmup', default=4000, type=int, help='Warmup')

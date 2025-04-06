@@ -1,0 +1,139 @@
+Great question — I've done a **code-level review** of your files (`train.py`, `trainer.py`, `transformer.py`, `common_layers.py`), specifically looking for **bugs or architectural flaws** that could cause your model to behave like this (e.g., `CER > 100%`, WER = `100%`, gibberish predictions). Here's a breakdown:
+
+---
+
+###### -> add eos ->smoothing for ce = 0.1
+
+
+
+
+
+## ✅ Overall Architecture — Seems Structurally OK
+
+You're using a Transformer encoder-decoder with optional VGG-style or simple CNN feature extractor → encoder → decoder. All the standard blocks are present:
+
+- LayerNorm, positional embeddings ✔️  
+- Multi-head self-attention and cross-attention ✔️  
+- Feedforward with GELU ✔️  
+- Dropout and label smoothing support ✔️
+
+BUT: It’s **not the architecture that’s broken** — it’s the **training dynamics, decoding, and possibly token mismatch.**
+
+---
+
+## ❗ Real Issues and Suspects in the Code
+
+### 1. 🔥 Decoder **loops garbage** — likely bad `tgt_input` during training
+In `trainer.py`:
+```python
+tgt_input = tgt[:, :-1]
+logits = self.model(src, src_mask, tgt_input, tgt_mask)
+```
+This is fine.
+
+BUT: Your targets are not padded consistently! You’re not trimming/padding with care — meaning decoder sees **misaligned garbage**.
+
+Also:
+```python
+loss = self.loss_fn(logits.reshape(-1, logits.size(-1)), tgt[:, 1:].reshape(-1))
+```
+If `tgt[:, 1:]` includes padding tokens **not set to `ignore_index`**, your model is **learning to predict padding**. That kills it.
+
+✅ Fix idea:
+Ensure `ignore_index = PAD_ID` and all `tgt` sequences are right-padded to the **same length**.
+Even better: add `attention_mask` to the decoder.
+
+---
+
+### 2. ❗**No EOS token in your vocab** — CE decoding never stops
+
+Your vocab:
+```python
+{'¶': 0, '§': 1, '¤': 2, '_': 3, "'": 4, 'a': 5, ..., ' ': 31}
+```
+You're missing **`<eos>`** or **`<end>`** token, so the model has no idea when to stop decoding during inference. That explains:
+
+- Repetition ("andthemorethatthemore...")
+- Overlong sequences
+- High CER
+
+✅ Fix idea:
+- Add `<eos>` token to your vocab and use it during training.
+- During inference, **stop decoding when `<eos>` is generated**.
+
+---
+
+### 3. ❗ Possibly Broken Blank Token in CTC
+
+You're using `_` (id = 3) as blank for CTC?
+
+Check in `trainer.py`:
+```python
+self.loss_fn = nn.CTCLoss(blank=self.args.blank_id, ...)
+```
+Make sure `args.blank_id = 3`. Otherwise, **CTC is trashing real characters** thinking they’re blanks.
+
+✅ Fix idea:
+Add this in `train.py` or `trainer.py`:
+```python
+parser.add_argument("--blank_id", type=int, default=3)
+```
+
+---
+
+### 4. ⚠️ No Teacher Forcing Rate or Scheduled Sampling
+
+Decoder is **greedy decoding only** and trained with full ground truth input. But inference runs autoregressive.
+
+Mismatch = catastrophic for unstable decoders.
+
+✅ Fix idea:
+- Implement scheduled sampling (teacher forcing ratio decreasing with epochs).
+- Even 5% noise can help it stabilize.
+
+---
+
+### 5. ⚠️ Rescoring or Beam Search May Be Misused
+
+You’re passing:
+```python
+lm_scores = calculate_lm_score(hyp_seqs)
+```
+
+If your `calculate_lm_score()` is returning **high scores to garbage sequences**, it may actually **encourage repetition**.
+
+✅ Fix idea:
+- Temporarily disable LM rescoring.
+- Compare pure greedy decoding vs beam with/without LM.
+
+---
+
+### 6. ⚠️ Feature extractor is optional but critical
+
+You're using:
+```python
+self.frontend = nn.Conv2d(...)  # or vgg-style
+```
+
+Make sure:
+- Audio is normalized properly
+- Feature shapes are consistent (e.g., [B, T, D])
+- Audio-to-feature scaling matches training labels
+
+---
+
+### ✅ Summary: What Needs Fixing First
+
+| Priority | Problem | Fix |
+|----------|---------|-----|
+| 🚨 High | No `<eos>` token | Add EOS to vocab + decoder stops when it's generated |
+| 🚨 High | Padding tokens are trained on | Add `ignore_index=PAD_ID` to CE loss, pad properly |
+| 🚨 High | Check if blank token is really `id=3` | Confirm `--blank_id=3` is passed to CTC |
+| ⚠️ Medium | Decoder uses greedy inference but is trained with full ground truth | Add scheduled sampling |
+| ⚠️ Medium | Beam search + LM rescoring might help/hurt | Compare with/without LM |
+| ⚠️ Low | Visualize encoder output + attention | Check what decoder is attending to |
+| ✅ Bonus | Train on 1 sample to sanity check | Model must overfit 1 sample to prove it can learn |
+
+---
+
+Want me to rewrite parts of your `trainer.py` with the above fixes? Happy to help fix decoding loop and padding issues.

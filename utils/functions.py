@@ -49,7 +49,7 @@ def save_model(model, epoch, opt, metrics, label2id, id2label, best_model=False)
             'model_state_dict': model.state_dict(),
             'optimizer_state_dict': opt.optimizer.state_dict(),
             'optimizer_params': {
-                'lr': opt.lr,
+                'lr': opt.optimizer.param_groups[0]['lr'],
                 'lr_anneal': opt.lr_anneal
             },
             'metrics': metrics

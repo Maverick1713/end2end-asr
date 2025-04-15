@@ -38,7 +38,7 @@ parser.add_argument('--feat_extractor', default='vgg_cnn', type=str, help='emb_c
 
 parser.add_argument('--verbose', action='store_true', help='Verbose')
 
-parser.add_argument('--continue-from', default='/content/end2end-asr/save/libri_drop0.1_cnn_batch12_4_vgg_layer4/best_model.th', help='Continue from checkpoint model')
+parser.add_argument('--continue-from', default='', help='Continue from checkpoint model')
 parser.add_argument('--augment', dest='augment', action='store_true', help='Use random tempo and gain perturbations.')
 parser.add_argument('--noise-dir', default=None,
                     help='Directory to inject noise into audio. If default, noise Inject not added')
@@ -101,5 +101,5 @@ USE_CUDA = args.cuda
 
 PAD_TOKEN = 0
 BLANK_TOKEN=29
-PAD_CHAR="[pad]"
+PAD_CHAR="*"
 

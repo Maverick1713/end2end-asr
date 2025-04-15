@@ -62,7 +62,7 @@ def create_manifest(split_dir, manifest_filename, min_dur=None, max_dur=None):
         if max_dur and dur > max_dur: continue
         transcript = open(txt_path).read().strip()
         abs_wav_path = os.path.join(BASE_SAVE_DIR, os.path.relpath(wav_path, '.'))
-        entries.append([abs_wav_path, dur, transcript])
+        entries.append([abs_wav_path, transcript])  # Only wav_path and transcript, no duration column
 
     df = pd.DataFrame(entries)
     df.to_csv(os.path.join(BASE_SAVE_DIR, "LibriSpeech_dataset", manifest_filename), sep='\t', index=False, header=False)

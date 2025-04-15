@@ -128,7 +128,7 @@ class Encoder(nn.Module):
     Encoder Transformer class
     """
 
-    def __init__(self, num_layers, num_heads, dim_model, dim_key, dim_value, dim_input, dim_inner, dropout=0.1, src_max_length=2500):
+    def __init__(self, num_layers, num_heads, dim_model, dim_key, dim_value, dim_input, dim_inner, dropout=0.1, src_max_length=1000):
         super(Encoder, self).__init__()
 
         self.dim_input = dim_input
@@ -210,8 +210,8 @@ class Decoder(nn.Module):
 
     def __init__(self, id2label, num_src_vocab, num_trg_vocab, num_layers, num_heads, dim_emb, dim_model, dim_inner, dim_key, dim_value, dropout=0.1, trg_max_length=1000, emb_trg_sharing=False):
         super(Decoder, self).__init__()
-        self.sos_id = constant.SOS_TOKEN
-        self.eos_id = constant.EOS_TOKEN
+        # self.sos_id = constant.SOS_TOKEN
+        # self.eos_id = constant.EOS_TOKEN
 
         self.id2label = id2label
 
@@ -242,7 +242,7 @@ class Decoder(nn.Module):
             for _ in range(num_layers)
         ])
 
-        self.output_linear = nn.Linear(dim_model, num_trg_vocab, bias=False)
+        self.output_linear = nn.Linear(dim_model, num_trg_vocab+1, bias=False)  #Ctc +1 added here
         nn.init.xavier_normal_(self.output_linear.weight)
 
         if emb_trg_sharing:
@@ -252,57 +252,42 @@ class Decoder(nn.Module):
             self.x_logit_scale = 1.0
 
     def preprocess(self, padded_input):
-        """
-        Add SOS TOKEN and EOS TOKEN into padded_input
-        """
-        seq = [y[y != constant.PAD_TOKEN] for y in padded_input]
-        eos = seq[0].new([self.eos_id])
-        sos = seq[0].new([self.sos_id])
-        seq_in = [torch.cat([sos, y], dim=0) for y in seq]
-        seq_out = [torch.cat([y, eos], dim=0) for y in seq]
-        seq_in_pad = pad_list(seq_in, self.eos_id)
-        seq_out_pad = pad_list(seq_out, constant.PAD_TOKEN)
-        assert seq_in_pad.size() == seq_out_pad.size()
-        return seq_in_pad, seq_out_pad
+        seq_clean = [y[y != constant.PAD_TOKEN] for y in padded_input]
+        seq_pad = pad_list(seq_clean, constant.PAD_TOKEN)  # shape: (B, max_T)
+        return seq_pad, seq_pad  # both input and gold are the same for CTC
 
     def forward(self, padded_input, encoder_padded_outputs, encoder_input_lengths):
-        """
-        args:
-            padded_input: B x T
-            encoder_padded_outputs: B x T x H
-            encoder_input_lengths: B
-        returns:
-            pred: B x T x vocab
-            gold: B x T
-        """
         decoder_self_attn_list, decoder_encoder_attn_list = [], []
         seq_in_pad, seq_out_pad = self.preprocess(padded_input)
 
-        # Prepare masks
-        non_pad_mask = get_non_pad_mask(seq_in_pad, pad_idx=constant.EOS_TOKEN)
+        non_pad_mask = get_non_pad_mask(seq_in_pad, pad_idx=constant.PAD_TOKEN)
         self_attn_mask_subseq = get_subsequent_mask(seq_in_pad)
-        self_attn_mask_keypad = get_attn_key_pad_mask(
-            seq_k=seq_in_pad, seq_q=seq_in_pad, pad_idx=constant.EOS_TOKEN)
+        self_attn_mask_keypad = get_attn_key_pad_mask(seq_k=seq_in_pad, seq_q=seq_in_pad, pad_idx=constant.PAD_TOKEN)
         self_attn_mask = (self_attn_mask_keypad + self_attn_mask_subseq).gt(0)
 
         output_length = seq_in_pad.size(1)
-        dec_enc_attn_mask = get_attn_pad_mask(
-            encoder_padded_outputs, encoder_input_lengths, output_length)
+        dec_enc_attn_mask = get_attn_pad_mask(encoder_padded_outputs, encoder_input_lengths, output_length)
 
-        decoder_output = self.dropout(self.trg_embedding(
-            seq_in_pad) * self.x_logit_scale + self.positional_encoding(seq_in_pad))
+        decoder_output = self.dropout(
+            self.trg_embedding(seq_in_pad) * self.x_logit_scale + self.positional_encoding(seq_in_pad)
+        )
 
         for layer in self.layers:
             decoder_output, decoder_self_attn, decoder_enc_attn = layer(
-                decoder_output, encoder_padded_outputs, non_pad_mask=non_pad_mask, self_attn_mask=self_attn_mask, dec_enc_attn_mask=dec_enc_attn_mask)
+                decoder_output, encoder_padded_outputs,
+                non_pad_mask=non_pad_mask,
+                self_attn_mask=self_attn_mask,
+                dec_enc_attn_mask=dec_enc_attn_mask
+            )
 
-            decoder_self_attn_list += [decoder_self_attn]
-            decoder_encoder_attn_list += [decoder_enc_attn]
+            decoder_self_attn_list.append(decoder_self_attn)
+            decoder_encoder_attn_list.append(decoder_enc_attn)
 
         seq_logit = self.output_linear(decoder_output)
         pred, gold = seq_logit, seq_out_pad
 
         return pred, gold, decoder_self_attn_list, decoder_encoder_attn_list
+
 
     def post_process_hyp(self, hyp):
         """
@@ -322,76 +307,37 @@ class Decoder(nn.Module):
             batch_ids_nbest_hyps: list of nbest in ids (size B)
             batch_strs_nbest_hyps: list of nbest in strings (size B)
         """
-        max_seq_len = self.trg_max_length
-        
-        ys = torch.ones(encoder_padded_outputs.size(0),1).fill_(constant.SOS_TOKEN).long() # batch_size x 1
-        if constant.args.cuda:
-            ys = ys.cuda()
+        batch_size = encoder_padded_outputs.size(0)
 
-        decoded_words = []
-        for t in range(300):
-        # for t in range(max_seq_len):
-            # print(t)
-            # Prepare masks
-            non_pad_mask = torch.ones_like(ys).float().unsqueeze(-1) # batch_size x t x 1
-            self_attn_mask = get_subsequent_mask(ys) # batch_size x t x t
+        # Project encoder outputs to vocab logits
+        logits = self.output_linear(encoder_padded_outputs)  # [B, T, V]
+        log_probs = F.log_softmax(logits, dim=-1)            # [B, T, V]
 
-            decoder_output = self.dropout(self.trg_embedding(ys) * self.x_logit_scale 
-                                        + self.positional_encoding(ys))
+        # Greedy decoding: pick most likely token at each time step
+        pred_ids = torch.argmax(log_probs, dim=-1)           # [B, T]
 
-            for layer in self.layers:
-                decoder_output, _, _ = layer(
-                    decoder_output, encoder_padded_outputs,
-                    non_pad_mask=non_pad_mask,
-                    self_attn_mask=self_attn_mask,
-                    dec_enc_attn_mask=None
-                )
+        decoded_batch = []
+        for b in range(batch_size):
+            prev_token = None
+            hyp = []
+            for t in range(pred_ids.size(1)):
+                token = pred_ids[b, t].item()
 
-            prob = self.output_linear(decoder_output) # batch_size x t x label_size
-            # _, next_word = torch.max(prob[:, -1], dim=1)
-            # decoded_words.append([constant.EOS_CHAR if ni.item() == constant.EOS_TOKEN else self.id2label[ni.item()] for ni in next_word.view(-1)])
-            # next_word = next_word.unsqueeze(-1)
+                # Ignore CTC blanks and padding
+                if token == constant.BLANK_TOKEN or token == constant.PAD_TOKEN:
+                    continue
 
-            # local_best_scores, local_best_ids = torch.topk(local_scores, beam_width, dim=1)
+                # Collapse repeated tokens
+                if token != prev_token:
+                    hyp.append(token)
+                prev_token = token
 
-            if lm_rescoring:
-                local_scores = F.log_softmax(prob, dim=1)
-                local_best_scores, local_best_ids = torch.topk(local_scores, beam_width, dim=1)
+            # Convert token IDs to string
+            hyp_str = "".join([self.id2label[token_id] for token_id in hyp])
+            decoded_batch.append(hyp_str)
 
-                best_score = -1
-                best_word = None
+        return decoded_batch
 
-                # calculate beam scores
-                for j in range(beam_width):
-                    cur_seq = " ".join(word for word in decoded_words)
-                    lm_score, num_words, oov_token = calculate_lm_score(cur_seq, lm, self.id2label)
-                    score = local_best_scores[0, j] + lm_score
-                    if best_score < score:
-                        best_score = score
-                        best_word = local_best_ids[0, j]
-                        next_word = best_word.unsqueeze(-1)
-                decoded_words.append(self.id2label[int(best_word)])
-            else:
-                _, next_word = torch.max(prob[:, -1], dim=1)
-                decoded_words.append([constant.EOS_CHAR if ni.item() == constant.EOS_TOKEN else self.id2label[ni.item()] for ni in next_word.view(-1)])
-                next_word = next_word.unsqueeze(-1)
-
-            if constant.args.cuda:
-                ys = torch.cat([ys, next_word.cuda()], dim=1)
-                ys = ys.cuda()
-            else:
-                ys = torch.cat([ys, next_word], dim=1)
-
-        sent = []
-        for _, row in enumerate(np.transpose(decoded_words)):
-            st = ''
-            for e in row:
-                if e == constant.EOS_CHAR: 
-                    break
-                else: 
-                    st += e
-            sent.append(st)
-        return sent
 
     def beam_search(self, encoder_padded_outputs, beam_width=2, nbest=5, lm_rescoring=False, lm=None, lm_weight=0.1, c_weight=1, prob_weight=1.0):
         """
@@ -405,115 +351,58 @@ class Decoder(nn.Module):
             batch_strs_nbest_hyps: list of nbest in strings (size B)
         """
         batch_size = encoder_padded_outputs.size(0)
-        max_len = encoder_padded_outputs.size(1)
+        logits = self.output_linear(encoder_padded_outputs)  # [B, T, V]
+        log_probs = F.log_softmax(logits, dim=-1)            # [B, T, V]
+
+        blank_id = constant.BLANK_TOKEN
+        pad_id = constant.PAD_TOKEN
 
         batch_ids_nbest_hyps = []
         batch_strs_nbest_hyps = []
 
-        for x in range(batch_size):
-            encoder_output = encoder_padded_outputs[x].unsqueeze(0) # 1 x T x H
+        for b in range(batch_size):
+            hyps = [([], 0.0)]  # List of (token sequence, score)
 
-            # add SOS_TOKEN
-            ys = torch.ones(1, 1).fill_(constant.SOS_TOKEN).type_as(encoder_output).long()
-            
-            hyp = {'score': 0.0, 'yseq':ys}
-            hyps = [hyp]
-            ended_hyps = []
+            for t in range(log_probs.size(1)):  # Iterate over time steps
+                next_hyps = {}
+                probs_t = log_probs[b, t]  # [V]
 
-            for i in range(300):
-            # for i in range(self.trg_max_length):
-                hyps_best_kept = []
-                for hyp in hyps:
-                    ys = hyp['yseq'] # 1 x i
+                for seq, score in hyps:
+                    for c in range(probs_t.size(0)):
+                        new_seq = seq.copy()
+                        new_score = score + probs_t[c].item()
 
-                    # Prepare masks
-                    non_pad_mask = torch.ones_like(ys).float().unsqueeze(-1) # 1xix1
-                    self_attn_mask = get_subsequent_mask(ys)
-
-                    decoder_output = self.dropout(self.trg_embedding(ys) * self.x_logit_scale 
-                                                + self.positional_encoding(ys))
-
-                    for layer in self.layers:
-                        # print(decoder_output.size(), encoder_output.size())
-                        decoder_output, _, _ = layer(
-                            decoder_output, encoder_output,
-                            non_pad_mask=non_pad_mask,
-                            self_attn_mask=self_attn_mask,
-                            dec_enc_attn_mask=None
-                        )
-
-                    seq_logit = self.output_linear(decoder_output[:, -1])
-                    local_scores = F.log_softmax(seq_logit, dim=1)
-                    local_best_scores, local_best_ids = torch.topk(local_scores, beam_width, dim=1)
-
-                    # calculate beam scores
-                    for j in range(beam_width):
-                        new_hyp = {}
-                        new_hyp["score"] = hyp["score"] + local_best_scores[0, j]
-
-                        new_hyp["yseq"] = torch.ones(1, (1+ys.size(1))).type_as(encoder_output).long()
-                        new_hyp["yseq"][:, :ys.size(1)] = hyp["yseq"].cpu()
-                        new_hyp["yseq"][:, ys.size(1)] = int(local_best_ids[0, j]) # adding new word
-                        
-                        hyps_best_kept.append(new_hyp)
-
-                    hyps_best_kept = sorted(hyps_best_kept, key=lambda x:x["score"], reverse=True)[:beam_width]
-                
-                hyps = hyps_best_kept
-
-                # add EOS_TOKEN
-                if i == max_len - 1:
-                    for hyp in hyps:
-                        hyp["yseq"] = torch.cat([hyp["yseq"], torch.ones(1,1).fill_(constant.EOS_TOKEN).type_as(encoder_output).long()], dim=1)
-
-                # add hypothesis that have EOS_TOKEN to ended_hyps list
-                unended_hyps = []
-                for hyp in hyps:
-                    if hyp["yseq"][0, -1] == constant.EOS_TOKEN:
-                        if lm_rescoring:
-                            # seq_str = "".join(self.id2label[char.item()] for char in hyp["yseq"][0]).replace(constant.PAD_CHAR,"").replace(constant.SOS_CHAR,"").replace(constant.EOS_CHAR,"")
-                            # seq_str = seq_str.replace("  ", " ")
-                            # num_words = len(seq_str.split())
-
-                            hyp["lm_score"], hyp["num_words"], oov_token = calculate_lm_score(hyp["yseq"], lm, self.id2label)
-                            num_words = hyp["num_words"]
-                            hyp["lm_score"] -= oov_token * 2
-                            hyp["final_score"] = hyp["score"] + lm_weight * hyp["lm_score"] + math.sqrt(num_words) * c_weight
+                        # CTC collapsing rules:
+                        if c == blank_id or c == pad_id:
+                            key = tuple(new_seq)
                         else:
-                            seq_str = "".join(self.id2label[char.item()] for char in hyp["yseq"][0]).replace(constant.PAD_CHAR,"").replace(constant.SOS_CHAR,"").replace(constant.EOS_CHAR,"")
-                            seq_str = seq_str.replace("  ", " ")
-                            num_words = len(seq_str.split())
-                            hyp["final_score"] = hyp["score"] + math.sqrt(num_words) * c_weight
-                        
-                        ended_hyps.append(hyp)
-                        
-                    else:
-                        unended_hyps.append(hyp)
-                hyps = unended_hyps
+                            if len(seq) == 0 or seq[-1] != c:
+                                new_seq.append(c)
+                            key = tuple(new_seq)
 
-                if len(hyps) == 0:
-                    # decoding process is finished
-                    break
-                
-            num_nbest = min(len(ended_hyps), nbest)
-            nbest_hyps = sorted(ended_hyps, key=lambda x:x["final_score"], reverse=True)[:num_nbest]
+                        if key in next_hyps:
+                            if next_hyps[key] < new_score:
+                                next_hyps[key] = new_score
+                        else:
+                            next_hyps[key] = new_score
 
-            a_nbest_hyps = sorted(ended_hyps, key=lambda x:x["final_score"], reverse=True)[:beam_width]
+                # Prune to top beam_width
+                sorted_hyps = sorted(next_hyps.items(), key=lambda x: x[1], reverse=True)
+                hyps = [(list(k), v) for k, v in sorted_hyps[:beam_width]]
 
-            if lm_rescoring:
-                for hyp in a_nbest_hyps:
-                    seq_str = "".join(self.id2label[char.item()] for char in hyp["yseq"][0]).replace(constant.PAD_CHAR,"").replace(constant.SOS_CHAR,"").replace(constant.EOS_CHAR,"")
-                    seq_str = seq_str.replace("  ", " ")
-                    num_words = len(seq_str.split())
-                    # print("{}  || final:{} e2e:{} lm:{} num words:{}".format(seq_str, hyp["final_score"], hyp["score"], hyp["lm_score"], hyp["num_words"]))
+            # Sort final hypotheses
+            final_hyps = sorted(hyps, key=lambda x: x[1], reverse=True)[:nbest]
 
-            for hyp in nbest_hyps:                
-                hyp["yseq"] = hyp["yseq"][0].cpu().numpy().tolist()
-                hyp_strs = self.post_process_hyp(hyp)
+            for token_seq, score in final_hyps:
+                hyp_str = "".join(self.id2label[tok] for tok in token_seq if tok != pad_id and tok != blank_id)
 
-                batch_ids_nbest_hyps.append(hyp["yseq"])
-                batch_strs_nbest_hyps.append(hyp_strs)
-                # print(hyp["yseq"], hyp_strs)
+                if lm_rescoring and lm is not None:
+                    lm_score, num_words, oov_token = calculate_lm_score(hyp_str, lm, self.id2label)
+                    score += lm_weight * lm_score + math.sqrt(num_words) * c_weight
+
+                batch_ids_nbest_hyps.append(token_seq)
+                batch_strs_nbest_hyps.append(hyp_str)
+
         return batch_ids_nbest_hyps, batch_strs_nbest_hyps
 
 class DecoderLayer(nn.Module):

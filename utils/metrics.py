@@ -131,37 +131,20 @@ def calculate_loss(pred, gold, input_lengths=None, target_lengths=None, smoothin
         else:
             loss = F.cross_entropy(pred, gold, ignore_index=constant.PAD_TOKEN, reduction="mean")
     elif loss_type == "ctc":
-        log_probs = pred.transpose(0, 1) # T x B x C
-        # print(gold.size())
-        targets = gold
-        # targets = gold.contiguous().view(-1) # (B*T)
-
-        """
-        log_probs: torch.Size([209, 8, 3793])
-        targets: torch.Size([8, 46])
-        input_lengths: torch.Size([8])
-        target_lengths: torch.Size([8])
-        """
-
-        # print("log_probs:", log_probs.size())
-        # print("targets:", targets.size())
-        # print("input_lengths:", input_lengths.size())
-        # print("target_lengths:", target_lengths.size())
-        # print(input_lengths)
-        # print(target_lengths)
-
+        log_probs = pred.transpose(0, 1)  # [T, B, C]
         log_probs = F.log_softmax(log_probs, dim=2)
-        loss = F.ctc_loss(log_probs, targets, input_lengths, target_lengths, reduction="mean",blank=3)
-        # mask = loss.clone() # mask Inf loss
-        # # mask[mask != float("Inf")] = 1
-        # mask[mask == float("Inf")] = 0
 
-        # loss = mask
-        # print(loss)
+        targets = torch.masked_select(gold, gold != constant.PAD_TOKEN)  # [total valid target tokens]
 
-        # loss_size = len(loss)
-        # loss = loss.sum() / loss_size
-        # print(loss)
+        loss = F.ctc_loss(
+            log_probs,           # [T, B, C]
+            targets,             # [sum(target_lengths)]
+            input_lengths,       # [B]
+            target_lengths,      # [B]
+            reduction="mean",
+            blank=constant.BLANK_TOKEN      # should be len(label2id)
+        )
+
     else:
         print("loss is not defined")
 

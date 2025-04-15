@@ -45,7 +45,7 @@ if __name__ == '__main__':
         labels = str(''.join(json.load(label_file)))
 
     # add PAD_CHAR, SOS_CHAR, EOS_CHAR
-    labels = constant.PAD_CHAR + constant.SOS_CHAR + constant.EOS_CHAR + labels
+    labels = labels
     label2id, id2label = {}, {}
     count = 0
     for i in range(len(labels)):
@@ -80,7 +80,6 @@ if __name__ == '__main__':
     start_epoch = 0
     metrics = None
     loaded_args = None
-    print(constant.args.continue_from)
     if constant.args.continue_from != "":
         logging.info("Continue from checkpoint: " + constant.args.continue_from)
         model, opt, epoch, metrics, loaded_args, label2id, id2label = load_model(

@@ -13,10 +13,10 @@ def save_model(model, epoch, opt, metrics, label2id, id2label, best_model=False)
     Saving model, TODO adding history
     """
     if best_model:
-        save_path = "{}/{}/best_model.th".format(
+        save_path = "{}/{}/best_model.h5".format(
             constant.args.save_folder, constant.args.name)
     else:
-        save_path = "{}/{}/epoch_{}.th".format(constant.args.save_folder,
+        save_path = "{}/{}/epoch_{}.h5".format(constant.args.save_folder,
                                                constant.args.name, epoch)
 
     if not os.path.exists(constant.args.save_folder + "/" + constant.args.name):

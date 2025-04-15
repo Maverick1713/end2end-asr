@@ -65,7 +65,7 @@ class Trainer():
                         tokens = []
                         for idx in seq:
                             token = id2token.get(idx.item(), '')
-                            if token == "<pad>" or token == "<eos>":
+                            if token == "[pad]":
                                 break
                             tokens.append(token)
                         decoded.append("".join(tokens))
@@ -109,8 +109,8 @@ class Trainer():
                 #     logging.info("HYP", strs_hyps)
 
                 for j in range(len(strs_hyps)):
-                    strs_hyps[j] = strs_hyps[j].replace(constant.SOS_CHAR, '').replace(constant.EOS_CHAR, '')
-                    strs_gold[j] = strs_gold[j].replace(constant.SOS_CHAR, '').replace(constant.EOS_CHAR, '')
+                    strs_hyps[j] = strs_hyps[j].replace(constant.PAD_CHAR, "")
+                    strs_gold[j] = strs_gold[j].replace(constant.PAD_CHAR, "")
                     cer = calculate_cer(strs_hyps[j].replace(' ', ''), strs_gold[j].replace(' ', ''))
                     wer = calculate_wer(strs_hyps[j], strs_gold[j])
                     total_cer += cer
@@ -187,8 +187,8 @@ class Trainer():
                         continue
 
                     for j in range(len(strs_hyps)):
-                        strs_hyps[j] = strs_hyps[j].replace(constant.SOS_CHAR, '').replace(constant.EOS_CHAR, '')
-                        strs_gold[j] = strs_gold[j].replace(constant.SOS_CHAR, '').replace(constant.EOS_CHAR, '')
+                        strs_hyps[j] = strs_hyps[j].replace(constant.PAD_CHAR, "")
+                        strs_gold[j] = strs_gold[j].replace(constant.PAD_CHAR, "")
                         cer = calculate_cer(strs_hyps[j].replace(' ', ''), strs_gold[j].replace(' ', ''))
                         wer = calculate_wer(strs_hyps[j], strs_gold[j])
                         total_valid_cer += cer
@@ -221,7 +221,7 @@ class Trainer():
                 best_valid_loss = total_valid_loss/len(valid_loader)
                 save_model(model, (epoch+1), opt, metrics,
                         label2id, id2label, best_model=True)
-                print("best_model.th updated")
+                print("best_model.h5 updated")
 
             if constant.args.shuffle:
                 logging.info("SHUFFLE")

@@ -41,8 +41,8 @@ def evaluate(model, test_loader, lm=None):
                 src, src_lengths, tgt, beam_search=constant.args.beam_search, beam_width=constant.args.beam_width, beam_nbest=constant.args.beam_nbest, lm=lm, lm_rescoring=constant.args.lm_rescoring, lm_weight=constant.args.lm_weight, c_weight=constant.args.c_weight, verbose=constant.args.verbose)
 
             for x in range(len(batch_strs_gold)):
-                hyp = batch_strs_hyps[x].replace(constant.EOS_CHAR, "").replace(constant.SOS_CHAR, "").replace(constant.PAD_CHAR, "")
-                gold = batch_strs_gold[x].replace(constant.EOS_CHAR, "").replace(constant.SOS_CHAR, "").replace(constant.PAD_CHAR, "")
+                hyp = batch_strs_hyps[x].replace(constant.PAD_CHAR, "")
+                gold = batch_strs_gold[x].replace(constant.PAD_CHAR, "")
 
                 wer = calculate_wer(hyp, gold)
                 cer = calculate_cer(hyp.strip(), gold.strip())

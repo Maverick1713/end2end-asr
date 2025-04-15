@@ -23,8 +23,9 @@ args = parser.parse_args()
 
 LIBRI_SPEECH_URLS = {
     "train": ["http://www.openslr.org/resources/12/train-clean-100.tar.gz",
-              "http://www.openslr.org/resources/12/train-clean-360.tar.gz",
-              "http://www.openslr.org/resources/12/train-other-500.tar.gz"],
+            #   "http://www.openslr.org/resources/12/train-clean-360.tar.gz",
+            #   "http://www.openslr.org/resources/12/train-other-500.tar.gz"
+             ],
 
     "val": ["http://www.openslr.org/resources/12/dev-clean.tar.gz",
             "http://www.openslr.org/resources/12/dev-other.tar.gz"],
@@ -35,7 +36,13 @@ LIBRI_SPEECH_URLS = {
 
 
 def _preprocess_transcript(phrase):
-    return phrase.strip().lower()
+    allowed_chars = "abcdefghijklmnopqrstuvwxyz "
+    # Filter out characters that are not in the allowed set
+    filtered_phrase = ''.join([char for char in phrase.strip().lower() if char in allowed_chars])
+    # If the filtered transcription is empty or longer than 100 characters, return None to indicate it should be ignored
+    if len(filtered_phrase) == 0 or len(filtered_phrase) > 100:
+        return None
+    return filtered_phrase
 
 
 def _process_file(wav_dir, txt_dir, base_filename, root_dir):
@@ -44,17 +51,21 @@ def _process_file(wav_dir, txt_dir, base_filename, root_dir):
     wav_recording_path = os.path.join(wav_dir, base_filename.replace(".flac", ".wav"))
     subprocess.call(["sox {}  -r {} -b 16 -c 1 {}".format(full_recording_path, str(args.sample_rate),
                                                           wav_recording_path)], shell=True)
-    # process transcript
+    # Process transcript
     txt_transcript_path = os.path.join(txt_dir, base_filename.replace(".flac", ".txt"))
     transcript_file = os.path.join(root_dir, "-".join(base_filename.split('-')[:-1]) + ".trans.txt")
     assert os.path.exists(transcript_file), "Transcript file {} does not exist.".format(transcript_file)
     transcriptions = open(transcript_file).read().strip().split("\n")
     transcriptions = {t.split()[0].split("-")[-1]: " ".join(t.split()[1:]) for t in transcriptions}
-    with open(txt_transcript_path, "w") as f:
-        key = base_filename.replace(".flac", "").split("-")[-1]
-        assert key in transcriptions, "{} is not in the transcriptions".format(key)
-        f.write(_preprocess_transcript(transcriptions[key]))
-        f.flush()
+    key = base_filename.replace(".flac", "").split("-")[-1]
+    assert key in transcriptions, "{} is not in the transcriptions".format(key)
+    transcription = _preprocess_transcript(transcriptions[key])
+
+    # Only write the transcription if it's valid (not None)
+    if transcription:
+        with open(txt_transcript_path, "w") as f:
+            f.write(transcription)
+            f.flush()
 
 
 def main():
@@ -76,7 +87,7 @@ def main():
         if os.path.exists(extracted_dir):
             shutil.rmtree(extracted_dir)
         for url in lst_libri_urls:
-            # check if we want to dl this file
+            # Check if we want to download this file
             dl_flag = False
             for f in files_to_dl:
                 if url.find(f) != -1:
@@ -111,4 +122,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

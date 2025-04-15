@@ -8,82 +8,82 @@ from utils.optimizer import NoamOpt
 from utils import constant
 
 
-# def save_model(model, epoch, opt, metrics, label2id, id2label, best_model=False):
-#     """
-#     Saving model, TODO adding history
-#     """
-#     if best_model:
-#         save_path = "{}/{}/best_model.th".format(
-#             constant.args.save_folder, constant.args.name)
-#     else:
-#         save_path = "{}/{}/epoch_{}.th".format(constant.args.save_folder,
-#                                                constant.args.name, epoch)
+def save_model(model, epoch, opt, metrics, label2id, id2label, best_model=False):
+    """
+    Saving model, TODO adding history
+    """
+    if best_model:
+        save_path = "{}/{}/best_model.h5".format(
+            constant.args.save_folder, constant.args.name)
+    else:
+        save_path = "{}/{}/epoch_{}.h5".format(constant.args.save_folder,
+                                               constant.args.name, epoch)
 
-#     if not os.path.exists(constant.args.save_folder + "/" + constant.args.name):
-#         os.makedirs(constant.args.save_folder + "/" + constant.args.name)
+    if not os.path.exists(constant.args.save_folder + "/" + constant.args.name):
+        os.makedirs(constant.args.save_folder + "/" + constant.args.name)
 
-#     print("SAVE MODEL to", save_path)
-#     args = {
-#         'label2id': label2id,
-#         'id2label': id2label,
-#         'args': constant.args,
-#         'epoch': epoch,
-#         'model_state_dict': model.state_dict(),
-#         'optimizer_state_dict': opt.optimizer.state_dict(),
-#         'optimizer_params': {
-#             '_step': opt._step,
-#             '_rate': opt._rate,
-#             'warmup': opt.warmup,
-#             'factor': opt.factor,
-#             'model_size': opt.model_size
-#         },
-#         'metrics': metrics
-#     }
-#     torch.save(args, save_path)
-
-
-# def load_model(load_path):
-#     """
-#     Loading model
-#     args:
-#         load_path: string
-#     """
-#     checkpoint = torch.load(load_path)
-
-#     epoch = checkpoint['epoch']
-#     metrics = checkpoint['metrics']
-#     if 'args' in checkpoint:
-#         args = checkpoint['args']
-
-#     label2id = checkpoint['label2id']
-#     id2label = checkpoint['id2label']
-
-#     model = init_transformer_model(args, label2id, id2label)
-#     model.load_state_dict(checkpoint['model_state_dict'])
-#     if args.cuda:
-#         model = model.cuda()
-
-#     opt = init_optimizer(args, model)
-#     if opt is not None:
-#         opt.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-#         opt._step = checkpoint['optimizer_params']['_step']
-#         opt._rate = checkpoint['optimizer_params']['_rate']
-#         opt.warmup = checkpoint['optimizer_params']['warmup']
-#         opt.factor = checkpoint['optimizer_params']['factor']
-#         opt.model_size = checkpoint['optimizer_params']['model_size']
-
-#     return model, opt, epoch, metrics, args, label2id, id2label
+    print("SAVE MODEL to", save_path)
+    args = {
+        'label2id': label2id,
+        'id2label': id2label,
+        'args': constant.args,
+        'epoch': epoch,
+        'model_state_dict': model.state_dict(),
+        'optimizer_state_dict': opt.optimizer.state_dict(),
+        'optimizer_params': {
+            '_step': opt._step,
+            '_rate': opt._rate,
+            'warmup': opt.warmup,
+            'factor': opt.factor,
+            'model_size': opt.model_size
+        },
+        'metrics': metrics
+    }
+    torch.save(args, save_path)
 
 
-# def init_optimizer(args, model):
-#     dim_input = args.dim_input
-#     warmup = args.warmup
-#     lr = args.lr
+def load_model(load_path):
+    """
+    Loading model
+    args:
+        load_path: string
+    """
+    checkpoint = torch.load(load_path)
 
-#     opt = NoamOpt(dim_input, 1, warmup, torch.optim.Adam(
-#         model.parameters(), lr=lr, betas=(0.9, 0.98), eps=1e-9))
+    epoch = checkpoint['epoch']
+    metrics = checkpoint['metrics']
+    if 'args' in checkpoint:
+        args = checkpoint['args']
 
-#     return opt
+    label2id = checkpoint['label2id']
+    id2label = checkpoint['id2label']
+
+    model = init_transformer_model(args, label2id, id2label)
+    model.load_state_dict(checkpoint['model_state_dict'])
+    if args.cuda:
+        model = model.cuda()
+
+    opt = init_optimizer(args, model)
+    if opt is not None:
+        opt.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        opt._step = checkpoint['optimizer_params']['_step']
+        opt._rate = checkpoint['optimizer_params']['_rate']
+        opt.warmup = checkpoint['optimizer_params']['warmup']
+        opt.factor = checkpoint['optimizer_params']['factor']
+        opt.model_size = checkpoint['optimizer_params']['model_size']
+
+    return model, opt, epoch, metrics, args, label2id, id2label
+
+
+def init_optimizer(args, model):
+    dim_input = args.dim_input
+    warmup = args.warmup
+    lr = args.lr
+
+    opt = NoamOpt(dim_input, 1, warmup, torch.optim.Adam(
+        model.parameters(), lr=lr, betas=(0.9, 0.98), eps=1e-9))
+
+    return opt
 
 
 def init_transformer_model(args, label2id, id2label):

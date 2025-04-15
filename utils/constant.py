@@ -13,14 +13,14 @@ parser.add_argument('--test-manifest-list', nargs='+', type=str)
 parser.add_argument('--lang-list', nargs='+', type=str)
 
 parser.add_argument('--sample-rate', default=16000, type=int, help='Sample rate')
-parser.add_argument('--batch-size', default=20, type=int, help='Batch size for training')
+parser.add_argument('--batch-size', default=5, type=int, help='Batch size for training')
 parser.add_argument('--num-workers', default=4, type=int, help='Number of workers used in data-loading')
 
 parser.add_argument('--labels-path', default='labels.json', help='Contains all characters for transcription')
 parser.add_argument('--label-smoothing', default=0.0, type=float, help='Label smoothing')
 
-parser.add_argument('--window-size', default=.02, type=float, help='Window size for spectrogram in seconds')
-parser.add_argument('--window-stride', default=.01, type=float, help='Window stride for spectrogram in seconds')
+parser.add_argument('--window-size', default=.025, type=float, help='Window size for spectrogram in seconds')
+parser.add_argument('--window-stride', default=.025, type=float, help='Window stride for spectrogram in seconds')
 parser.add_argument('--window', default='hamming', help='Window type for spectrogram generation')
 
 parser.add_argument('--epochs', default=1000, type=int, help='Number of training epochs')
@@ -28,7 +28,7 @@ parser.add_argument('--cuda', dest='cuda', action='store_true', help='Use cuda t
 
 parser.add_argument('--device-ids', default=None, nargs='+', type=int,
                     help='If using cuda, sets the GPU devices for the process')
-parser.add_argument('--lr', '--learning-rate', default=3e-4, type=float, help='initial learning rate')
+parser.add_argument('--lr', '--learning-rate', default=1e-4, type=float, help='initial learning rate')
 
 parser.add_argument('--save-every', default=2, type=int, help='Save model every certain number of epochs')
 parser.add_argument('--save-folder', default='models/', help='Location to save epoch models')
@@ -49,7 +49,7 @@ parser.add_argument('--noise-max', default=0.5,
                     help='Maximum noise levels to sample from. Maximum 1.0', type=float)
 
 # Transformer
-parser.add_argument('--num-layers', default=3, type=int, help='Number of layers')
+parser.add_argument('--num-layers', default=4, type=int, help='Number of layers')
 parser.add_argument('--num-heads', default=5, type=int, help='Number of heads')
 parser.add_argument('--dim-model', default=512, type=int, help='Model dimension')
 parser.add_argument('--dim-key', default=64, type=int, help='Key dimension')
@@ -58,8 +58,8 @@ parser.add_argument('--dim-input', default=161, type=int, help='Input dimension'
 parser.add_argument('--dim-inner', default=1024, type=int, help='Inner dimension')
 parser.add_argument('--dim-emb', default=512, type=int, help='Embedding dimension')
 
-parser.add_argument('--src-max-len', default=620, type=int, help='Source max length')
-parser.add_argument('--tgt-max-len', default=520, type=int, help='Target max length')
+parser.add_argument('--src-max-len', default=800, type=int, help='Source max length')
+parser.add_argument('--tgt-max-len', default=125, type=int, help='Target max length')
 
 # Noam optimizer
 parser.add_argument('--warmup', default=4000, type=int, help='Warmup')
@@ -81,7 +81,7 @@ parser.add_argument('--c-weight', default=0.1, type=float, help='Word count weig
 parser.add_argument('--prob-weight', default=1.0, type=float, help='Probability E2E weight')
 
 # loss
-parser.add_argument('--loss', type=str, default='ce', help='ce or ctc')
+parser.add_argument('--loss', type=str, default='ctc', help='ce or ctc')
 parser.add_argument('--clip', action='store_true', help="clip")
 parser.add_argument('--max-norm', default=400, type=float, help="max norm for clipping")
 
@@ -100,9 +100,6 @@ args = parser.parse_args()
 USE_CUDA = args.cuda
 
 PAD_TOKEN = 0
-SOS_TOKEN = 1
-EOS_TOKEN = 2
+BLANK_TOKEN=29
+PAD_CHAR="[pad]"
 
-PAD_CHAR = "¶"
-SOS_CHAR = "§"
-EOS_CHAR = "¤"

@@ -64,7 +64,6 @@ class SpectrogramParser(AudioParser):
         self.noise_prob = audio_conf.get('noise_prob')
 
     def parse_audio(self, audio_path):
-        print("parse audio called")
         if self.augment:
             y = load_randomly_augmented_audio(audio_path, self.sample_rate)
         else:
@@ -141,7 +140,7 @@ class SpectrogramDataset(Dataset, SpectrogramParser):
 
     def parse_transcript(self, transcript_path):
         with open(transcript_path, 'r', encoding='utf8') as transcript_file:
-            transcript = constant.SOS_CHAR + transcript_file.read().replace('\n', '').lower() + constant.EOS_CHAR
+            transcript = transcript_file.read().replace('\n', '').lower()
 
         transcript = list(
             filter(None, [self.label2id.get(x) for x in list(transcript)]))

@@ -65,7 +65,7 @@ class Trainer():
                         tokens = []
                         for idx in seq:
                             token = id2token.get(idx.item(), '')
-                            if token == "[pad]":
+                            if token == "*":
                                 break
                             tokens.append(token)
                         decoded.append("".join(tokens))
@@ -170,14 +170,14 @@ class Trainer():
                         for ut_gold in gold_seq:
                             str_gold = ""
                             for x in ut_gold:
-                                if int(x) == constant.PAD_TOKEN or int(x) == 3:
+                                if int(x) == constant.PAD_TOKEN:
                                     break
                                 str_gold = str_gold + id2label[int(x)]
                             strs_gold.append(str_gold)
                         for ut_hyp in hyp_seq:
                             str_hyp = ""
                             for x in ut_hyp:
-                                if int(x) == constant.PAD_TOKEN or int(x) == 3:
+                                if int(x) == constant.PAD_TOKEN :
                                     break
                                 str_hyp = str_hyp + id2label[int(x)]
                             strs_hyps.append(str_hyp)

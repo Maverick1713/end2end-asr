@@ -59,7 +59,7 @@ parser.add_argument('--dim-inner', default=1024, type=int, help='Inner dimension
 parser.add_argument('--dim-emb', default=512, type=int, help='Embedding dimension')
 
 parser.add_argument('--src-max-len', default=800, type=int, help='Source max length')
-parser.add_argument('--tgt-max-len', default=125, type=int, help='Target max length')
+parser.add_argument('--tgt-max-len', default=800, type=int, help='Target max length')
 
 # Noam optimizer
 parser.add_argument('--warmup', default=4000, type=int, help='Warmup')
@@ -100,6 +100,6 @@ args = parser.parse_args()
 USE_CUDA = args.cuda
 
 PAD_TOKEN = 0
-BLANK_TOKEN=29
+BLANK_TOKEN=30
 PAD_CHAR="*"
 

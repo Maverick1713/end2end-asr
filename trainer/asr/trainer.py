@@ -113,6 +113,7 @@ class Trainer():
                     strs_gold[j] = strs_gold[j].replace(constant.PAD_CHAR, "")
                     cer = calculate_cer(strs_hyps[j].replace(' ', ''), strs_gold[j].replace(' ', ''))
                     wer = calculate_wer(strs_hyps[j], strs_gold[j])
+                    print(strs_hyps,str_gold,cer,wer)
                     total_cer += cer
                     total_wer += wer
                     total_char += len(strs_gold[j].replace(' ', ''))

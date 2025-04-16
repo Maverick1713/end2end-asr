@@ -135,7 +135,7 @@ def calculate_loss(pred, gold, input_lengths=None, target_lengths=None, smoothin
         log_probs = F.log_softmax(log_probs, dim=2)
 
         targets = torch.masked_select(gold, gold != constant.PAD_TOKEN)  # [total valid target tokens]
-
+        
         loss = F.ctc_loss(
             log_probs,           # [T, B, C]
             targets,             # [sum(target_lengths)]

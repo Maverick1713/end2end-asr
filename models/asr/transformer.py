@@ -242,7 +242,7 @@ class Decoder(nn.Module):
             for _ in range(num_layers)
         ])
 
-        self.output_linear = nn.Linear(dim_model, num_trg_vocab+1, bias=False)  #Ctc +1 added here
+        self.output_linear = nn.Linear(dim_model, num_trg_vocab+1, bias=True)  #Ctc +1 added here , Bias added
         nn.init.xavier_normal_(self.output_linear.weight)
 
         if emb_trg_sharing:
